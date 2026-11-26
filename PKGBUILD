@@ -1,15 +1,27 @@
 pkgname=poolang
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
-pkgdesc="Custom AST-based interpreted programming language"
-arch=('x86_64' 'i686')
+pkgdesc="Custom AST-based interpreted programming language with built-in graphics libraries"
+arch=('x86_64' 'i686' 'aarch64')
 license=('MIT')
 depends=('gcc-libs')
+optdepends=('libx11: native GUI window support for POOGRAPHIC')
 makedepends=('gcc' 'make')
-source=('main.cpp' 'Makefile')
-sha256sums=('SKIP' 'SKIP')
+source=(
+    'Makefile'
+    'src/main.cpp'
+    'libs/poographic.hpp'
+    'libs/poographic.cpp'
+    'libs/poographicl.hpp'
+    'libs/poographicl.cpp'
+)
+sha256sums=('SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP' 'SKIP')
 
 build() {
+    mkdir -p src libs
+    cp -f "$srcdir/main.cpp" src/
+    cp -f "$srcdir/poographic.hpp" "$srcdir/poographic.cpp" \
+          "$srcdir/poographicl.hpp" "$srcdir/poographicl.cpp" libs/
     make
 }
 
