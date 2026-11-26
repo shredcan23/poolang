@@ -1,20 +1,22 @@
-CXX = g++
-CXXFLAGS = -std=c++17 -O2
+CXX ?= g++
+CXXFLAGS ?= -std=c++17 -O2
 TARGET = poolang
 SRC = main.cpp
-INSTALL_DIR = /usr/local/bin
+PREFIX ?= /usr/local
+DESTDIR ?=
 
-# Runs when you just type "make"
+.PHONY: all install uninstall clean
+
 all: $(TARGET)
 
-# Compiles main.cpp into poolang
 $(TARGET): $(SRC)
 	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET)
 
-# Copies poolang into your system PATH so it becomes a global command
 install: $(TARGET)
-	install -m 755 $(TARGET) $(INSTALL_DIR)/$(TARGET)
+	install -Dm755 $(TARGET) "$(DESTDIR)$(PREFIX)/bin/$(TARGET)"
 
-# Removes the compiled binary for a clean rebuild
+uninstall:
+	rm -f "$(DESTDIR)$(PREFIX)/bin/$(TARGET)"
+
 clean:
 	rm -f $(TARGET)
