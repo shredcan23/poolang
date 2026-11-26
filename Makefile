@@ -13,7 +13,8 @@ $(TARGET): $(SRC)
 	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET)
 
 install: $(TARGET)
-	install -Dm755 $(TARGET) "$(DESTDIR)$(PREFIX)/bin/$(TARGET)"
+	mkdir -p "$(DESTDIR)$(PREFIX)/bin"
+	install -m 755 $(TARGET) "$(DESTDIR)$(PREFIX)/bin/$(TARGET)"
 
 uninstall:
 	rm -f "$(DESTDIR)$(PREFIX)/bin/$(TARGET)"
