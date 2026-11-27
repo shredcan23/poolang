@@ -650,13 +650,33 @@ private:
         return parsePrimary();
     }
 
+    bool hasClosingBangAhead() const {
+        for (size_t i = pos_; i < tokens_.size(); ++i) {
+            TokenType t = tokens_[i].type;
+            if (t == TokenType::BANG) return true;
+            if (t == TokenType::SEMI || t == TokenType::RPAREN || t == TokenType::END_OF_FILE) return false;
+            if (t == TokenType::IDENT &&
+                (tokens_[i].text == "IS" || tokens_[i].text == "AND" || tokens_[i].text == "OR")) {
+                return false;
+            }
+        }
+        return false;
+    }
+
     bool isZeroArgTerminator() const {
-        return check(TokenType::SEMI) || check(TokenType::RPAREN) || check(TokenType::COMMA) ||
-               check(TokenType::PLUS) || check(TokenType::STAR) || check(TokenType::SLASH) ||
-               check(TokenType::MOD) || check(TokenType::LT) || check(TokenType::GT) ||
-               check(TokenType::LE) || check(TokenType::GE) || check(TokenType::EQ) ||
-               check(TokenType::NEQ) || checkKeyword("IS") || checkKeyword("AND") ||
-               checkKeyword("OR");
+        if (check(TokenType::SEMI) || check(TokenType::RPAREN) || check(TokenType::COMMA) ||
+            check(TokenType::PLUS) || check(TokenType::STAR) || check(TokenType::SLASH) ||
+            check(TokenType::MOD) || check(TokenType::LT) || check(TokenType::GT) ||
+            check(TokenType::LE) || check(TokenType::GE) || check(TokenType::EQ) ||
+            check(TokenType::NEQ) || checkKeyword("IS") || checkKeyword("AND") ||
+            checkKeyword("OR")) {
+            return true;
+        }
+        // Distinguish "MOUSEX! - 400;" (zero-arg call + subtraction) from "RANDOM!-5, 5!;"
+        if (check(TokenType::MINUS) && !hasClosingBangAhead()) {
+            return true;
+        }
+        return false;
     }
 
     ExprPtr parsePrimary() {
