@@ -4,6 +4,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <csignal>
 #include <cstdlib>
 #include <fcntl.h>
 #include <fstream>
@@ -112,6 +113,18 @@ void restoreTerminal() {
     }
 }
 
+void handleExitSignal(int sig) {
+    if (g_cli.termConfigured) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &g_cli.origTermios);
+        fcntl(STDIN_FILENO, F_SETFL, g_cli.origFlags);
+        const char* resetSeq = "\033[0m\033[?25h\n";
+        ssize_t ignored = write(STDOUT_FILENO, resetSeq, 11);
+        (void)ignored;
+        g_cli.termConfigured = false;
+    }
+    std::_Exit(128 + sig);
+}
+
 void setupTerminal() {
     if (g_cli.termConfigured) return;
 
@@ -127,6 +140,8 @@ void setupTerminal() {
         fcntl(STDIN_FILENO, F_SETFL, g_cli.origFlags | O_NONBLOCK);
 
         std::atexit(restoreTerminal);
+        std::signal(SIGINT, handleExitSignal);
+        std::signal(SIGTERM, handleExitSignal);
         g_cli.termConfigured = true;
     }
 
@@ -204,6 +219,8 @@ void makeWindow(int width, int height) {
     g_cli.width = std::max(1, width);
     g_cli.height = std::max(1, height);
     g_cli.grid.assign(g_cli.height, std::vector<Cell>(g_cli.width));
+    g_cli.holdTimers.clear();
+    g_cli.pressedKeys.clear();
     g_cli.alive = true;
     g_cli.lastFrame = std::chrono::steady_clock::now();
     setupTerminal();
@@ -321,9 +338,13 @@ void writeText(int x, int y, const std::string& text) {
     ensureGrid();
     if (y < 0 || y >= g_cli.height) return;
     for (size_t i = 0; i < text.size(); ++i) {
+        unsigned char raw = static_cast<unsigned char>(text[i]);
+        if (raw == '\r' || raw == '\n') continue; // Prevent CRLF files from corrupting cursor
+        char safeChar = std::isprint(raw) ? static_cast<char>(raw) : ' ';
+
         int px = x + static_cast<int>(i);
         if (px < 0 || px >= g_cli.width) continue;
-        g_cli.grid[y][px].ch = text[i];
+        g_cli.grid[y][px].ch = safeChar;
         g_cli.grid[y][px].fgColor = g_cli.currentBrush;
         g_cli.grid[y][px].hasText = true;
     }
