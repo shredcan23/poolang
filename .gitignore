@@ -1,0 +1,12 @@
+# Compiled binary and object files
+/poolang
+*.o
+
+# Arch Linux makepkg build outputs
+/pkg/
+*.pkg.tar.zst
+*.pkg.tar.xz
+
+# OS / editor clutter
+.DS_Store
+.vscode/
