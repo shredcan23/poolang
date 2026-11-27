@@ -4,8 +4,7 @@ pkgrel=1
 pkgdesc="Custom AST-based interpreted programming language with built-in graphics libraries"
 arch=('x86_64' 'i686' 'aarch64')
 license=('MIT')
-depends=('gcc-libs')
-optdepends=('libx11: native GUI window support for POOGRAPHIC')
+depends=('gcc-libs' 'libx11')
 makedepends=('gcc' 'make')
 source=(
     'Makefile'
