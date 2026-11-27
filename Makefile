@@ -1,15 +1,17 @@
 CXX ?= g++
-CXXFLAGS ?= -std=c++17 -O2 -Ilibs
+CXXFLAGS ?= -O2
 TARGET = poolang
 SRC = src/main.cpp libs/poographic.cpp libs/poographicl.cpp
 PREFIX ?= /usr/local
 DESTDIR ?=
 
+ALL_CXXFLAGS = -std=c++17 -Ilibs $(CXXFLAGS)
+
 # Auto-detect X11 for native GUI windows in POOGRAPHIC
 ifneq ($(wildcard /usr/include/X11/Xlib.h),)
     LDFLAGS += -lX11
 else ifneq ($(wildcard /opt/X11/include/X11/Xlib.h),)
-    CXXFLAGS += -I/opt/X11/include
+    ALL_CXXFLAGS += -I/opt/X11/include
     LDFLAGS += -L/opt/X11/lib -lX11
 endif
 
@@ -17,7 +19,8 @@ endif
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)$(CXX) $(CXXFLAGS)$(SRC) -o $(TARGET)$(LDFLAGS)
+$(TARGET): $(SRC)
+	$(CXX) $(ALL_CXXFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
 
 install: $(TARGET)
 	mkdir -p "$(DESTDIR)$(PREFIX)/bin"
