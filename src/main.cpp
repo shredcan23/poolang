@@ -480,7 +480,6 @@ private:
             }
             auto stmt = std::make_shared<LoopStmt>();
             stmt->cond = parseExpression();
-            // Support both "LOOP WHILE ALIVE!! ! ... !" and "LOOP WHILE ALIVE! ! ... !"
             bool openedByCall = !check(TokenType::BANG);
             stmt->body = parseBangBlock(openedByCall);
             match(TokenType::SEMI);
@@ -498,9 +497,18 @@ private:
             }
             std::string funcName = advance().text;
             std::vector<FuncParam> params;
+            bool bodyAlreadyOpened = false;
 
             if (match(TokenType::BANG)) {
-                if (!match(TokenType::BANG)) {
+                if (check(TokenType::BANG)) {
+                    // Distinguish "FUNC foo!! ! body !" (3 bangs) vs "FUNC foo! ! body !" (2 bangs)
+                    if (peek(1).type == TokenType::BANG) {
+                        advance(); // consume 2nd bang as param close; 3rd bang opens body
+                    }
+                    // else: leave 2nd bang for parseBangBlock(false)
+                } else if (check(TokenType::LT) ||
+                           (check(TokenType::IDENT) &&
+                            (peek(1).type == TokenType::COMMA || peek(1).type == TokenType::BANG))) {
                     while (!isAtEnd() && !check(TokenType::BANG)) {
                         ValType pType = ValType::NUM;
                         if (check(TokenType::LT)) {
@@ -515,6 +523,9 @@ private:
                         if (!match(TokenType::COMMA)) break;
                     }
                     expect(TokenType::BANG, "Expected '!' after function parameters");
+                } else {
+                    // Written as "FUNC foo! body !"
+                    bodyAlreadyOpened = true;
                 }
             }
 
@@ -522,7 +533,7 @@ private:
             decl->returnType = retType;
             decl->name = funcName;
             decl->params = std::move(params);
-            decl->body = parseBangBlock(false);
+            decl->body = parseBangBlock(bodyAlreadyOpened);
             match(TokenType::SEMI);
             return decl;
         }
@@ -639,6 +650,15 @@ private:
         return parsePrimary();
     }
 
+    bool isZeroArgTerminator() const {
+        return check(TokenType::SEMI) || check(TokenType::RPAREN) || check(TokenType::COMMA) ||
+               check(TokenType::PLUS) || check(TokenType::STAR) || check(TokenType::SLASH) ||
+               check(TokenType::MOD) || check(TokenType::LT) || check(TokenType::GT) ||
+               check(TokenType::LE) || check(TokenType::GE) || check(TokenType::EQ) ||
+               check(TokenType::NEQ) || checkKeyword("IS") || checkKeyword("AND") ||
+               checkKeyword("OR");
+    }
+
     ExprPtr parsePrimary() {
         if (check(TokenType::NUMBER)) {
             double v = std::stod(advance().text);
@@ -668,12 +688,7 @@ private:
             // Function / library call: NAME!arg1, arg2! or NAME!! or NAME!;
             if (match(TokenType::BANG)) {
                 std::vector<ExprPtr> args;
-                // Check for immediate close (NAME!!), statement end (NAME!;), or keyword (CONDITION CLICK! IS)
-                if (match(TokenType::BANG)) {
-                    return std::make_shared<CallExpr>(name, std::move(args));
-                }
-                if (check(TokenType::SEMI) || check(TokenType::RPAREN) || check(TokenType::COMMA) ||
-                    checkKeyword("IS") || checkKeyword("AND") || checkKeyword("OR")) {
+                if (match(TokenType::BANG) || isZeroArgTerminator()) {
                     return std::make_shared<CallExpr>(name, std::move(args));
                 }
 
@@ -769,6 +784,19 @@ private:
         return s;
     }
 
+    void bindLatestAllTouchWatcher(const std::string& varName) {
+        if (allTouchWatchers_.empty()) return;
+        // Remove any older watcher already bound to this variable to prevent duplicates
+        for (size_t i = 0; i + 1 < allTouchWatchers_.size();) {
+            if (allTouchWatchers_[i].boundVar == varName) {
+                allTouchWatchers_.erase(allTouchWatchers_.begin() + static_cast<long>(i));
+            } else {
+                ++i;
+            }
+        }
+        allTouchWatchers_.back().boundVar = varName;
+    }
+
     void updateAllTouchWatchers() {
         bool anyHit = false;
         for (const auto& w : allTouchWatchers_) {
@@ -814,11 +842,9 @@ private:
             Value val = evalExpr(mk->initExpr, env);
             env->define(mk->varName, val);
 
-            // If initialized with ALLTOUCH, bind the variable so it stays live for the runtime
             if (auto call = std::dynamic_pointer_cast<CallExpr>(mk->initExpr)) {
-                if ((call->callee == "POOGRAPHIC.ALLTOUCH" || call->callee == "POOGRAPHICL.ALLTOUCH") &&
-                    !allTouchWatchers_.empty()) {
-                    allTouchWatchers_.back().boundVar = mk->varName;
+                if (call->callee == "POOGRAPHIC.ALLTOUCH" || call->callee == "POOGRAPHICL.ALLTOUCH") {
+                    bindLatestAllTouchWatcher(mk->varName);
                 }
             }
             return;
@@ -829,9 +855,8 @@ private:
             env->assign(asg->varName, val);
 
             if (auto call = std::dynamic_pointer_cast<CallExpr>(asg->expr)) {
-                if ((call->callee == "POOGRAPHIC.ALLTOUCH" || call->callee == "POOGRAPHICL.ALLTOUCH") &&
-                    !allTouchWatchers_.empty()) {
-                    allTouchWatchers_.back().boundVar = asg->varName;
+                if (call->callee == "POOGRAPHIC.ALLTOUCH" || call->callee == "POOGRAPHICL.ALLTOUCH") {
+                    bindLatestAllTouchWatcher(asg->varName);
                 }
             }
             return;
