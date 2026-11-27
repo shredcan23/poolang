@@ -6,6 +6,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <random>
 #include <string>
 #include <thread>
@@ -67,6 +68,17 @@ unsigned long parseColorRGB(const std::string& raw) {
 std::mt19937& rng() {
     static std::mt19937 gen(std::random_device{}());
     return gen;
+}
+
+void skipPpmComments(std::istream& in) {
+    while (true) {
+        in >> std::ws;
+        if (in.peek() == '#') {
+            in.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        } else {
+            break;
+        }
+    }
 }
 
 #if POOGRAPHIC_HAS_X11
@@ -199,6 +211,9 @@ void makeWindow(int width, int height) {
     g_gui.width = std::max(1, width);
     g_gui.height = std::max(1, height);
     g_gui.screen = DefaultScreen(g_gui.display);
+    g_gui.heldKeys.clear();
+    g_gui.pressedKeys.clear();
+    g_gui.mouseClicked = false;
 
     Window root = RootWindow(g_gui.display, g_gui.screen);
     g_gui.window = XCreateSimpleWindow(
@@ -356,7 +371,6 @@ void pic(int x, int y, const std::string& filename) {
     // Supports binary P6 PPM images natively without external libraries
     std::ifstream in(filename, std::ios::binary);
     if (!in) {
-        // Fallback placeholder outline if image file isn't found
         XDrawRectangle(g_gui.display, g_gui.backbuffer, g_gui.gc, x, y, 32, 32);
         return;
     }
@@ -365,17 +379,25 @@ void pic(int x, int y, const std::string& filename) {
     in >> magic;
     if (magic == "P6") {
         int imgW = 0, imgH = 0, maxVal = 255;
-        in >> imgW >> imgH >> maxVal;
-        in.get(); // consume single whitespace byte
-        for (int py = 0; py < imgH; ++py) {
-            for (int px = 0; px < imgW; ++px) {
-                unsigned char rgb[3];
-                if (!in.read(reinterpret_cast<char*>(rgb), 3)) break;
-                unsigned long pixel = (static_cast<unsigned long>(rgb[0]) << 16) |
-                                      (static_cast<unsigned long>(rgb[1]) << 8) |
-                                      static_cast<unsigned long>(rgb[2]);
-                XSetForeground(g_gui.display, g_gui.gc, pixel);
-                XDrawPoint(g_gui.display, g_gui.backbuffer, g_gui.gc, x + px, y + py);
+        skipPpmComments(in);
+        in >> imgW;
+        skipPpmComments(in);
+        in >> imgH;
+        skipPpmComments(in);
+        in >> maxVal;
+        in.get(); // consume single whitespace byte before binary pixels
+
+        if (imgW > 0 && imgH > 0 && maxVal > 0) {
+            for (int py = 0; py < imgH; ++py) {
+                for (int px = 0; px < imgW; ++px) {
+                    unsigned char rgb[3];
+                    if (!in.read(reinterpret_cast<char*>(rgb), 3)) break;
+                    unsigned long pixel = (static_cast<unsigned long>(rgb[0]) << 16) |
+                                          (static_cast<unsigned long>(rgb[1]) << 8) |
+                                          static_cast<unsigned long>(rgb[2]);
+                    XSetForeground(g_gui.display, g_gui.gc, pixel);
+                    XDrawPoint(g_gui.display, g_gui.backbuffer, g_gui.gc, x + px, y + py);
+                }
             }
         }
         XSetForeground(g_gui.display, g_gui.gc, g_gui.currentBrush);
